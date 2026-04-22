@@ -1,0 +1,1578 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RFP Matching Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --bg: #0a0a0f;
+    --panel: #13131a;
+    --panel-hover: #1a1a24;
+    --border: #252532;
+    --text: #e8e8ef;
+    --text-dim: #8a8a99;
+    --accent: #A100FF;
+    --accent-dim: #7a00c2;
+    --success: #00d68f;
+    --warning: #ffb800;
+    --danger: #ff4d6d;
+  }
+  html, body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Inter", sans-serif;
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+  }
+  body {
+    background-image:
+      radial-gradient(circle at 15% 0%, rgba(161, 0, 255, 0.08), transparent 40%),
+      radial-gradient(circle at 85% 100%, rgba(161, 0, 255, 0.05), transparent 40%);
+  }
+  .container { max-width: 1400px; margin: 0 auto; padding: 32px 24px 60px; }
+  header {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 24px; padding-bottom: 24px;
+    border-bottom: 1px solid var(--border);
+  }
+  .logo { display: flex; align-items: center; gap: 14px; font-size: 20px; font-weight: 700; letter-spacing: -0.02em; }
+  .logo-dot { width: 12px; height: 12px; background: var(--accent); border-radius: 3px; box-shadow: 0 0 24px var(--accent); }
+  .subtitle { color: var(--text-dim); font-size: 13px; font-weight: 400; margin-top: 2px; }
+
+  .tabs { display: flex; gap: 4px; margin-bottom: 24px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+  .tab {
+    padding: 12px 20px; background: transparent; border: none;
+    color: var(--text-dim); font-size: 14px; font-weight: 500;
+    cursor: pointer; border-bottom: 2px solid transparent;
+    transition: all 0.15s; display: flex; align-items: center; gap: 8px;
+  }
+  .tab:hover { color: var(--text); }
+  .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .tab-badge {
+    background: var(--border); color: var(--text-dim);
+    padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600;
+  }
+  .tab.active .tab-badge { background: rgba(161, 0, 255, 0.2); color: var(--accent); }
+  .tab-content { display: none; }
+  .tab-content.active { display: block; }
+
+  .panel {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 14px; padding: 22px; margin-bottom: 20px;
+  }
+  .panel h2 {
+    font-size: 12px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: 0.08em; color: var(--text-dim); margin-bottom: 14px;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .panel-counter {
+    font-size: 11px; color: var(--accent);
+    background: rgba(161, 0, 255, 0.1);
+    padding: 2px 8px; border-radius: 10px; letter-spacing: 0;
+  }
+  textarea {
+    width: 100%; min-height: 240px; background: #0d0d13;
+    border: 1px solid var(--border); border-radius: 8px; color: var(--text);
+    padding: 14px; font-family: "SF Mono", Menlo, Monaco, Consolas, monospace;
+    font-size: 12.5px; line-height: 1.5; resize: vertical;
+    transition: border-color 0.15s;
+  }
+  textarea:focus { outline: none; border-color: var(--accent); }
+  input[type="text"], input[type="number"] {
+    background: #0d0d13; border: 1px solid var(--border);
+    border-radius: 8px; color: var(--text); padding: 10px 12px;
+    font-size: 13px; font-family: inherit; width: 100%;
+    transition: border-color 0.15s;
+  }
+  input[type="text"]:focus, input[type="number"]:focus { outline: none; border-color: var(--accent); }
+  .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
+  .form-row-full { margin-bottom: 12px; }
+  label {
+    display: block; font-size: 11px; text-transform: uppercase;
+    letter-spacing: 0.06em; color: var(--text-dim);
+    margin-bottom: 6px; font-weight: 600;
+  }
+
+  .drop-zone {
+    margin-top: 12px; border: 1.5px dashed var(--border);
+    border-radius: 8px; padding: 22px; text-align: center;
+    transition: all 0.2s; cursor: pointer; position: relative;
+  }
+  .drop-zone:hover, .drop-zone.dragover {
+    border-color: var(--accent); background: rgba(161, 0, 255, 0.05);
+  }
+  .drop-zone input[type="file"] { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+  .drop-zone-text { font-size: 13px; color: var(--text-dim); }
+  .drop-zone-text strong { color: var(--text); }
+  .file-loaded { color: var(--success) !important; }
+
+  .actions { display: flex; gap: 12px; margin-bottom: 24px; align-items: center; flex-wrap: wrap; }
+  button.primary {
+    background: var(--accent); color: white; border: none;
+    padding: 13px 30px; border-radius: 8px; font-weight: 600;
+    font-size: 14px; cursor: pointer; transition: all 0.2s;
+    box-shadow: 0 4px 20px rgba(161, 0, 255, 0.3);
+  }
+  button.primary:hover {
+    background: var(--accent-dim); transform: translateY(-1px);
+    box-shadow: 0 6px 28px rgba(161, 0, 255, 0.4);
+  }
+  button.secondary {
+    background: transparent; color: var(--text);
+    border: 1px solid var(--border); padding: 13px 22px;
+    border-radius: 8px; font-weight: 500; font-size: 14px;
+    cursor: pointer; transition: all 0.15s;
+  }
+  button.secondary:hover { border-color: var(--accent); color: var(--accent); }
+  button.danger {
+    background: transparent; color: var(--danger);
+    border: 1px solid var(--border); padding: 8px 14px;
+    border-radius: 6px; font-size: 12px; cursor: pointer;
+    transition: all 0.15s;
+  }
+  button.danger:hover { border-color: var(--danger); background: rgba(255, 77, 109, 0.08); }
+  button.small { padding: 8px 14px; font-size: 12px; }
+
+  .stats-bar {
+    display: flex; gap: 20px; margin-left: auto;
+    color: var(--text-dim); font-size: 13px; flex-wrap: wrap;
+  }
+  .stats-bar span strong { color: var(--text); font-weight: 600; }
+
+  .db-header {
+    display: flex; justify-content: space-between;
+    align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 12px;
+  }
+  .db-header h3 { font-size: 18px; font-weight: 700; letter-spacing: -0.01em; }
+  .db-list { display: grid; gap: 10px; max-height: 600px; overflow-y: auto; padding-right: 4px; }
+  .db-list::-webkit-scrollbar { width: 8px; }
+  .db-list::-webkit-scrollbar-track { background: #0d0d13; border-radius: 4px; }
+  .db-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+  .db-item {
+    background: #0d0d13; border: 1px solid var(--border);
+    border-radius: 10px; padding: 14px 18px;
+    display: flex; justify-content: space-between;
+    align-items: center; gap: 16px; transition: all 0.15s;
+  }
+  .db-item:hover { border-color: rgba(161, 0, 255, 0.3); }
+  .db-item.needs-review {
+    border-color: rgba(255, 184, 0, 0.4);
+    background: rgba(255, 184, 0, 0.04);
+  }
+  .db-item-info { flex: 1; min-width: 0; }
+  .db-item-name {
+    font-size: 15px; font-weight: 600; margin-bottom: 4px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .db-item-meta {
+    font-size: 12px; color: var(--text-dim);
+    display: flex; gap: 12px; flex-wrap: wrap;
+  }
+  .db-item-skills {
+    font-size: 11px; color: var(--text-dim); margin-top: 6px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .review-badge {
+    font-size: 9px; padding: 2px 6px; border-radius: 4px;
+    background: rgba(255, 184, 0, 0.15); color: var(--warning);
+    border: 1px solid rgba(255, 184, 0, 0.3);
+    text-transform: uppercase; letter-spacing: 0.05em; font-weight: 700;
+  }
+  .db-empty {
+    text-align: center; padding: 60px 20px; color: var(--text-dim);
+    background: #0d0d13; border: 1px dashed var(--border); border-radius: 12px;
+  }
+  .db-empty-icon { font-size: 36px; margin-bottom: 10px; opacity: 0.5; }
+
+  .upload-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; margin-bottom: 20px; }
+  @media (max-width: 1100px) { .upload-grid { grid-template-columns: 1fr 1fr; } }
+  @media (max-width: 700px) { .upload-grid { grid-template-columns: 1fr; } }
+  .parsed-preview {
+    background: #0d0d13; border: 1px solid var(--border);
+    border-radius: 8px; padding: 12px; margin-top: 10px;
+    font-size: 12px; display: none; line-height: 1.7;
+  }
+  .parsed-preview.show { display: block; }
+  .parsed-preview strong { color: var(--accent); }
+
+  .results-header {
+    display: flex; justify-content: space-between;
+    align-items: center; margin-bottom: 20px;
+  }
+  .results-header h2 { font-size: 24px; font-weight: 700; letter-spacing: -0.02em; }
+  .extracted-section {
+    margin-bottom: 24px; padding: 16px;
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 12px;
+  }
+  .extracted-title {
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em;
+    color: var(--text-dim); margin-bottom: 10px; font-weight: 600;
+  }
+  .extracted-tags { display: flex; flex-wrap: wrap; gap: 8px; }
+  .tag {
+    background: rgba(161, 0, 255, 0.12);
+    border: 1px solid rgba(161, 0, 255, 0.3);
+    color: #d4a3ff; padding: 4px 10px;
+    border-radius: 20px; font-size: 12px; font-weight: 500;
+  }
+  .tag.meta { background: #1a1a24; border-color: var(--border); color: var(--text-dim); }
+
+  .cards {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    gap: 16px;
+  }
+  .card {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 14px; padding: 22px;
+    transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    position: relative; animation: fadeUp 0.45s ease both;
+  }
+  .card:hover {
+    background: var(--panel-hover);
+    border-color: rgba(161, 0, 255, 0.4);
+    transform: translateY(-3px);
+  }
+  .card.top {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 1px var(--accent), 0 8px 32px rgba(161, 0, 255, 0.15);
+  }
+  .top-badge {
+    position: absolute; top: -10px; right: 16px;
+    background: var(--accent); color: white;
+    font-size: 10px; font-weight: 700; padding: 4px 10px;
+    border-radius: 20px; text-transform: uppercase;
+    letter-spacing: 0.08em; box-shadow: 0 4px 14px rgba(161, 0, 255, 0.4);
+  }
+  .card-header {
+    display: flex; justify-content: space-between;
+    align-items: flex-start; margin-bottom: 14px; gap: 12px;
+  }
+  .consultant-name { font-size: 17px; font-weight: 600; letter-spacing: -0.01em; }
+  .consultant-role { font-size: 12px; color: var(--text-dim); margin-top: 3px; }
+  .score { font-size: 30px; font-weight: 700; letter-spacing: -0.03em; line-height: 1; }
+  .score-bar {
+    height: 6px; background: #0d0d13; border-radius: 3px;
+    overflow: hidden; margin-bottom: 14px;
+  }
+  .score-fill {
+    height: 100%; border-radius: 3px;
+    transition: width 0.9s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .breakdown {
+    display: grid; grid-template-columns: 1fr 1fr 1fr;
+    gap: 8px; margin-bottom: 14px; padding: 12px;
+    background: #0d0d13; border-radius: 8px;
+  }
+  .breakdown-item { text-align: center; }
+  .breakdown-label {
+    font-size: 10px; color: var(--text-dim); text-transform: uppercase;
+    letter-spacing: 0.06em; margin-bottom: 4px;
+  }
+  .breakdown-value { font-size: 14px; font-weight: 600; }
+  .reasoning {
+    font-size: 13px; color: var(--text-dim);
+    line-height: 1.55; margin-bottom: 12px;
+  }
+  .skills-matched { display: flex; flex-wrap: wrap; gap: 6px; }
+  .skill-pill {
+    font-size: 11px; padding: 3px 9px; border-radius: 12px;
+    background: rgba(0, 214, 143, 0.1);
+    border: 1px solid rgba(0, 214, 143, 0.3); color: #5aeab3;
+  }
+  .skill-pill.miss {
+    background: #1a1a24; border-color: var(--border); color: var(--text-dim);
+  }
+  .empty-state {
+    text-align: center; padding: 80px 20px; color: var(--text-dim);
+    font-size: 14px; background: var(--panel);
+    border: 1px dashed var(--border); border-radius: 14px;
+  }
+  .empty-state-icon { font-size: 40px; margin-bottom: 12px; opacity: 0.5; }
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(14px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .toast {
+    position: fixed; bottom: 24px; right: 24px;
+    background: var(--panel); border: 1px solid var(--accent);
+    padding: 12px 18px; border-radius: 10px; font-size: 13px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+    animation: slideIn 0.3s ease; z-index: 1000; max-width: 400px;
+  }
+  @keyframes slideIn {
+    from { opacity: 0; transform: translateX(20px); }
+    to { opacity: 1; transform: translateX(0); }
+  }
+
+  .modal-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.7);
+    display: none; align-items: center; justify-content: center;
+    z-index: 2000; padding: 20px;
+  }
+  .modal-overlay.show { display: flex; }
+  .modal {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 14px; padding: 24px;
+    max-width: 720px; width: 100%; max-height: 90vh; overflow-y: auto;
+  }
+  .modal h3 { font-size: 18px; margin-bottom: 16px; font-weight: 700; }
+  .modal-actions {
+    display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px;
+  }
+
+  .info-box {
+    background: rgba(161, 0, 255, 0.08);
+    border: 1px solid rgba(161, 0, 255, 0.25);
+    border-radius: 10px; padding: 14px 16px;
+    font-size: 13px; color: var(--text);
+    margin-bottom: 20px; line-height: 1.6;
+  }
+  .info-box strong { color: var(--accent); }
+  .info-box code {
+    background: #0d0d13; padding: 2px 6px; border-radius: 4px;
+    font-size: 11px; color: var(--accent);
+  }
+  .warn-box {
+    background: rgba(255, 184, 0, 0.08);
+    border: 1px solid rgba(255, 184, 0, 0.3);
+    border-radius: 10px; padding: 14px 16px;
+    font-size: 13px; color: var(--text);
+    margin-bottom: 20px; line-height: 1.6;
+  }
+  .warn-box strong { color: var(--warning); }
+
+  .mapping-table { width: 100%; border-collapse: collapse; margin: 12px 0; }
+  .mapping-table th, .mapping-table td {
+    padding: 8px 10px; text-align: left; font-size: 12px;
+    border-bottom: 1px solid var(--border);
+  }
+  .mapping-table th { color: var(--text-dim); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; font-size: 10px; }
+  .mapping-table select {
+    background: #0d0d13; border: 1px solid var(--border);
+    border-radius: 6px; color: var(--text); padding: 6px 8px;
+    font-size: 12px; width: 100%;
+  }
+  .preview-table {
+    width: 100%; border-collapse: collapse; font-size: 12px;
+    margin-top: 12px;
+  }
+  .preview-table th, .preview-table td {
+    padding: 6px 8px; border: 1px solid var(--border);
+    text-align: left; max-width: 160px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .preview-table th { background: #0d0d13; color: var(--text-dim); font-size: 10px; text-transform: uppercase; }
+  .preview-wrapper { overflow-x: auto; max-height: 200px; overflow-y: auto; }
+
+  .step {
+    padding: 12px 14px;
+    background: #0d0d13;
+    border-left: 3px solid var(--accent);
+    border-radius: 6px;
+    margin-bottom: 10px;
+    font-size: 13px;
+    line-height: 1.5;
+  }
+  .step strong { color: var(--accent); }
+
+  .progress-bar {
+    width: 100%; height: 8px; background: #0d0d13;
+    border-radius: 4px; overflow: hidden; margin-top: 12px;
+  }
+  .progress-fill {
+    height: 100%; background: var(--accent);
+    transition: width 0.3s ease;
+  }
+
+  /* Review-Grid nach Upload */
+  .review-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
+    max-height: 500px; overflow-y: auto; padding-right: 6px;
+  }
+  @media (max-width: 800px) { .review-grid { grid-template-columns: 1fr; } }
+  .review-card {
+    background: #0d0d13; border: 1px solid var(--border);
+    border-radius: 10px; padding: 12px 14px;
+    font-size: 12px; line-height: 1.6;
+    display: flex; flex-direction: column; gap: 4px;
+    cursor: pointer; transition: all 0.15s;
+  }
+  .review-card:hover { border-color: var(--accent); }
+  .review-card.low-confidence {
+    border-left: 3px solid var(--warning);
+  }
+  .review-card strong { color: var(--text); font-size: 13px; }
+  .review-card .meta { color: var(--text-dim); font-size: 11px; }
+  .review-card .source { color: var(--text-dim); font-size: 10px; font-style: italic; margin-top: 4px; }
+  .confidence-tag {
+    font-size: 10px; padding: 2px 6px; border-radius: 4px;
+    text-transform: uppercase; letter-spacing: 0.05em; font-weight: 700;
+    margin-left: auto;
+  }
+  .confidence-tag.high { background: rgba(0, 214, 143, 0.15); color: var(--success); }
+  .confidence-tag.medium { background: rgba(255, 184, 0, 0.15); color: var(--warning); }
+  .confidence-tag.low { background: rgba(255, 77, 109, 0.15); color: var(--danger); }
+</style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <div class="logo">
+      <div class="logo-dot"></div>
+      <div>
+        RFP Matching Dashboard
+        <div class="subtitle">Consultant-to-Opportunity Scoring Engine</div>
+      </div>
+    </div>
+  </header>
+
+  <div class="tabs">
+    <button class="tab active" data-tab="match">⚡ RFP Matching</button>
+    <button class="tab" data-tab="database">💾 CV Datenbank <span class="tab-badge" id="dbBadge">0</span></button>
+    <button class="tab" data-tab="import">📥 CV Import</button>
+  </div>
+
+  <!-- TAB 1: MATCHING -->
+  <div class="tab-content active" id="tab-match">
+    <div class="panel">
+      <h2>
+        <span>RFP Input</span>
+        <span class="panel-counter" id="rfpCounter">0 Zeichen</span>
+      </h2>
+      <textarea id="rfpInput" placeholder="RFP-Text hier einfügen oder Datei hochladen...">We are looking for senior consultants to support a Post-Merger Integration (PMI) project in the banking sector. The ideal candidate has 8+ years of experience in financial services transformation, strong skills in SAP, cloud migration, change management, and regulatory compliance. Experience with digital banking and payment systems is a plus. Location: Germany. Industry: Banking / Financial Services.</textarea>
+      <div class="drop-zone" id="rfpDropZone">
+        <input type="file" id="rfpFile" accept=".txt,.pdf,.md,.pptx">
+        <div class="drop-zone-text" id="rfpDropText">
+          <strong>📄 RFP-Datei hochladen</strong> oder hier ablegen<br>
+          <span style="font-size: 11px; opacity: 0.7;">Unterstützt: .txt, .md, .pdf, .pptx</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="actions">
+      <button class="primary" id="runBtn">⚡ Match gegen Datenbank</button>
+      <button class="secondary" id="resetBtn">RFP zurücksetzen</button>
+      <button class="secondary" id="loadSampleBtn">Beispiel-RFP laden</button>
+      <div class="stats-bar" id="statsBar"></div>
+    </div>
+
+    <div id="resultsContainer">
+      <div class="empty-state">
+        <div class="empty-state-icon">⚡</div>
+        <div>Klicke auf „Match gegen Datenbank" um Ergebnisse zu berechnen.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB 2: DATABASE -->
+  <div class="tab-content" id="tab-database">
+    <div class="info-box">
+      <strong>💾 CV-Datenbank</strong><br>
+      Consultants werden lokal im Browser gespeichert. Einträge mit ⚠️ <strong>Needs Review</strong> sollten manuell geprüft werden (Auto-Extraktion war unsicher).
+    </div>
+
+    <div class="upload-grid">
+      <div class="panel">
+        <h2><span>✏️ Manuell hinzufügen</span></h2>
+        <div class="form-row-full">
+          <label>Name</label>
+          <input type="text" id="manualName" placeholder="Dr. Anna Weber">
+        </div>
+        <div class="form-row">
+          <div><label>Rolle</label><input type="text" id="manualRole" placeholder="Senior Manager"></div>
+          <div><label>Jahre</label><input type="number" id="manualExp" min="0" max="50" placeholder="10"></div>
+        </div>
+        <div class="form-row-full">
+          <label>Branche</label>
+          <input type="text" id="manualIndustry" placeholder="Banking">
+        </div>
+        <div class="form-row-full">
+          <label>Skills (Komma-getrennt)</label>
+          <input type="text" id="manualSkills" placeholder="PMI, SAP, Banking">
+        </div>
+        <button class="primary" id="addManualBtn" style="width: 100%;">➕ Hinzufügen</button>
+      </div>
+
+      <div class="panel">
+        <h2><span>📥 Schnell-Import</span></h2>
+        <div style="font-size: 13px; line-height: 1.6; color: var(--text-dim); margin-bottom: 16px;">
+          Lade CVs einzeln oder im Batch hoch. Für große Mengen empfehlen wir den <strong style="color: var(--accent);">CV Import Tab</strong>.
+        </div>
+        <div class="drop-zone" id="cvDropZone" style="margin-top: 0;">
+          <input type="file" id="cvFile" accept=".txt,.pdf,.md,.json,.pptx" multiple>
+          <div class="drop-zone-text" id="cvDropText">
+            <strong>📄 CV(s) hochladen</strong><br>
+            <span style="font-size: 11px; opacity: 0.7;">.pptx, .pdf, .txt, .json</span>
+          </div>
+        </div>
+        <div class="parsed-preview" id="parsedPreview"></div>
+      </div>
+
+      <div class="panel">
+        <h2><span>⚙️ Aktionen</span></h2>
+        <div style="display: flex; flex-direction: column; gap: 10px;">
+          <button class="secondary" id="exportDbBtn">⬇ Als JSON exportieren</button>
+          <button class="secondary" id="exportCsvBtn">⬇ Als CSV exportieren</button>
+          <button class="secondary" id="importDbBtn">⬆ JSON importieren</button>
+          <input type="file" id="importDbFile" accept=".json" style="display: none;">
+          <button class="danger" id="clearDbBtn" style="padding: 13px 20px; font-size: 14px;">🗑 Datenbank leeren</button>
+        </div>
+        <div style="font-size: 11px; color: var(--text-dim); margin-top: 12px; line-height: 1.5;">
+          💡 JSON-Export zum Teilen mit Kollegen.
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="db-header">
+        <h3>Gespeicherte Consultants <span id="dbCount" style="color: var(--text-dim); font-weight: 400; font-size: 14px;"></span></h3>
+        <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
+          <label style="display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-dim);">
+            <input type="checkbox" id="filterReview" style="width: auto;"> Nur „Needs Review"
+          </label>
+          <input type="text" id="dbSearch" placeholder="🔍 Suchen..." style="max-width: 240px;">
+        </div>
+      </div>
+      <div id="dbList" class="db-list"></div>
+    </div>
+  </div>
+
+  <!-- TAB 3: IMPORT -->
+  <div class="tab-content" id="tab-import">
+    <div class="info-box">
+      <strong>📥 CV Import aus SharePoint</strong><br>
+      Lade hier alle deine CV-Dateien hoch (PPTX, PDF, TXT). Das Tool extrahiert Name, Skills, Erfahrung und Branche automatisch.<br>
+      <strong>⚠️ Wichtig:</strong> Alle Daten bleiben lokal im Browser. Lade nur CVs hoch, für die du Zugriffsrecht hast.
+    </div>
+
+    <div class="warn-box">
+      <strong>⚠️ Automatische Extraktion ist nicht perfekt</strong><br>
+      Bei PPTX funktioniert die Extraktion meist zu 60-75%. <strong>Prüfe nach dem Upload die Einträge im Review-Screen</strong> und korrigiere offensichtliche Fehler.
+      Besonders kritisch: <strong>Name</strong> (wird oft mit Jobtitel verwechselt) und <strong>Skills</strong> (manche werden nicht erkannt, wenn sie als Grafik/Tabelle im PPT liegen).
+    </div>
+
+    <div class="panel">
+      <h2><span>📋 So funktioniert's</span></h2>
+      <div class="step"><strong>Schritt 1:</strong> In SharePoint deine CV-Library öffnen und alle CVs markieren, die du importieren willst.</div>
+      <div class="step"><strong>Schritt 2:</strong> Rechtsklick → <code>Herunterladen</code> → SharePoint packt alle Dateien als ZIP. ZIP entpacken, damit du einzelne Dateien hast.</div>
+      <div class="step"><strong>Schritt 3:</strong> Alle Dateien unten reinziehen (oder Ordner auswählen). Das Tool verarbeitet sie parallel.</div>
+      <div class="step"><strong>Schritt 4:</strong> Review-Screen erscheint — prüfe die extrahierten Daten und korrigiere per Klick.</div>
+    </div>
+
+    <div class="panel">
+      <h2><span>Batch-Upload</span></h2>
+      <div class="drop-zone" id="batchDropZone" style="margin-top: 0; padding: 40px 22px;">
+        <input type="file" id="batchFile" accept=".pptx,.pdf,.txt,.md,.json" multiple>
+        <div class="drop-zone-text" id="batchDropText">
+          <strong style="font-size: 15px;">📦 Mehrere CV-Dateien hochladen</strong><br>
+          <span style="font-size: 12px; opacity: 0.8; margin-top: 6px; display: inline-block;">.pptx (Accenture Life-CV), .pdf, .txt — alle auf einmal</span>
+        </div>
+      </div>
+      <div id="batchProgress" style="display: none; margin-top: 16px;">
+        <div style="font-size: 13px; color: var(--text-dim);" id="batchStatus">Wird verarbeitet...</div>
+        <div class="progress-bar"><div class="progress-fill" id="batchProgressFill" style="width: 0%;"></div></div>
+      </div>
+    </div>
+
+    <div class="panel" id="reviewPanel" style="display: none;">
+      <h2><span>Review: Extrahierte Daten</span></h2>
+      <div style="font-size: 13px; color: var(--text-dim); margin-bottom: 14px; line-height: 1.5;">
+        <span id="reviewSummary"></span><br>
+        <span style="color: var(--warning);">💡 Klicke einen Eintrag zum Bearbeiten.</span> Einträge mit niedriger Confidence sind gelb markiert.
+      </div>
+      <div id="reviewGrid" class="review-grid"></div>
+      <div style="margin-top: 16px; display: flex; gap: 10px; flex-wrap: wrap;">
+        <button class="primary" id="reviewDoneBtn">✓ Fertig, zur Datenbank</button>
+        <button class="secondary" id="reviewExportBtn">⬇ Als CSV für Excel-Check exportieren</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Modal -->
+<div class="modal-overlay" id="editModal">
+  <div class="modal" style="max-width: 640px;">
+    <h3>Consultant bearbeiten</h3>
+    <div id="editSourceInfo" style="font-size: 11px; color: var(--text-dim); margin-bottom: 12px; font-style: italic;"></div>
+    <div class="form-row-full"><label>Name</label><input type="text" id="editName"></div>
+    <div class="form-row">
+      <div><label>Rolle</label><input type="text" id="editRole"></div>
+      <div><label>Erfahrung (Jahre)</label><input type="number" id="editExp" min="0" max="50"></div>
+    </div>
+    <div class="form-row-full"><label>Branche</label><input type="text" id="editIndustry"></div>
+    <div class="form-row-full"><label>Skills (Komma-getrennt)</label><input type="text" id="editSkills"></div>
+    <div class="form-row-full" id="editRawTextWrapper" style="display: none;">
+      <label>Original-Text aus CV (zur Referenz)</label>
+      <textarea id="editRawText" readonly style="min-height: 120px; font-size: 11px;"></textarea>
+    </div>
+    <div class="modal-actions">
+      <button class="secondary" id="cancelEditBtn">Abbrechen</button>
+      <button class="primary" id="saveEditBtn">Speichern</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  if (window.pdfjsLib) {
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  }
+
+  const STORAGE_KEY = 'rfp_matcher_consultants_v1';
+
+  function loadDB() {
+    try { const raw = localStorage.getItem(STORAGE_KEY); return raw ? JSON.parse(raw) : []; }
+    catch { return []; }
+  }
+  function saveDB(arr) {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(arr));
+    renderDB(); updateBadges();
+  }
+  function addToDB(consultant) {
+    const db = loadDB();
+    consultant.id = 'c_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
+    consultant.addedAt = new Date().toISOString();
+    db.push(consultant);
+    saveDB(db);
+    return consultant;
+  }
+  function removeFromDB(id) { saveDB(loadDB().filter(c => c.id !== id)); }
+  function updateInDB(id, updates) {
+    const db = loadDB();
+    const idx = db.findIndex(c => c.id === id);
+    if (idx >= 0) { db[idx] = { ...db[idx], ...updates }; saveDB(db); }
+  }
+
+  const KNOWN_SKILLS = [
+    "pmi", "post-merger integration", "m&a", "merger", "acquisition", "carve-out",
+    "sap", "oracle", "salesforce", "workday", "servicenow",
+    "cloud", "cloud migration", "aws", "azure", "gcp", "kubernetes",
+    "change management", "transformation", "digital transformation", "operating model",
+    "regulatory", "regulatory compliance", "compliance", "risk", "risk management", "aml", "kyc", "basel",
+    "banking", "payments", "digital banking", "fintech", "open banking", "payment systems",
+    "data analytics", "machine learning", "ai", "python", "sql", "data science",
+    "strategy", "business strategy", "process", "process optimization", "agile", "scrum", "lean",
+    "cybersecurity", "erp", "crm", "supply chain", "procurement",
+    "finance transformation", "financial services", "insurance",
+    "java", "javascript", "react", "node", "devops", "terraform",
+    "power bi", "tableau", "powerpoint", "excel",
+    "project management", "stakeholder management", "leadership",
+    "mergers and acquisitions", "due diligence", "valuation",
+    "automation", "rpa", "blueprinting"
+  ];
+  const INDUSTRIES = [
+    "banking", "financial services", "finance", "insurance",
+    "retail", "manufacturing", "healthcare", "pharma", "life sciences",
+    "energy", "utilities", "public sector", "telco", "telecom",
+    "automotive", "consumer goods", "technology", "media"
+  ];
+  const SENIORITY_HINTS = {
+    "junior": 2, "consultant": 3, "senior consultant": 5,
+    "manager": 6, "senior manager": 8, "principal": 10,
+    "director": 12, "managing director": 14, "partner": 15,
+    "analyst": 2, "associate": 3, "specialist": 4
+  };
+
+  function extractFromRFP(text) {
+    const lower = text.toLowerCase();
+    const skills = KNOWN_SKILLS.filter(s => lower.includes(s));
+    const industries = INDUSTRIES.filter(i => lower.includes(i));
+    const deduped = skills.filter(s =>
+      !skills.some(other => other !== s && other.includes(s) && other.length > s.length)
+    );
+    let minExp = 0;
+    const expMatch = lower.match(/(\d+)\s*\+?\s*(?:years|jahre|jahren)/);
+    if (expMatch) minExp = parseInt(expMatch[1]);
+    for (const [word, val] of Object.entries(SENIORITY_HINTS)) {
+      if (lower.includes(word) && val > minExp) minExp = val;
+    }
+    return { skills: [...new Set(deduped)], industry: industries[0] || null, minExperience: minExp };
+  }
+
+  function titleCase(s) {
+    return String(s).split(" ").map(w => w[0] ? w[0].toUpperCase() + w.slice(1) : w).join(" ");
+  }
+
+  // ===================================================================
+  // PPTX PARSER
+  // ===================================================================
+  async function extractTextFromPPTX(file) {
+    const zip = await JSZip.loadAsync(file);
+    const slideFiles = Object.keys(zip.files)
+      .filter(f => /^ppt\/slides\/slide\d+\.xml$/.test(f))
+      .sort((a, b) => {
+        const na = parseInt(a.match(/slide(\d+)/)[1]);
+        const nb = parseInt(b.match(/slide(\d+)/)[1]);
+        return na - nb;
+      });
+
+    let slides = []; // Array of slide texts (preserves order)
+    for (const sf of slideFiles) {
+      const xml = await zip.files[sf].async("text");
+      // Extract text between <a:t>...</a:t> tags (PowerPoint text runs)
+      const matches = [...xml.matchAll(/<a:t[^>]*>([^<]*)<\/a:t>/g)];
+      const text = matches.map(m => m[1]
+        .replace(/&amp;/g, '&')
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&quot;/g, '"')
+        .replace(/&#39;/g, "'")
+      ).filter(t => t.trim()).join("\n");
+      if (text.trim()) slides.push(text);
+    }
+
+    // Additionally extract slide notes (might contain Skills list)
+    const noteFiles = Object.keys(zip.files).filter(f => /^ppt\/notesSlides\/notesSlide\d+\.xml$/.test(f));
+    let notes = [];
+    for (const nf of noteFiles) {
+      const xml = await zip.files[nf].async("text");
+      const matches = [...xml.matchAll(/<a:t[^>]*>([^<]*)<\/a:t>/g)];
+      const text = matches.map(m => m[1]).filter(t => t.trim()).join("\n");
+      if (text.trim()) notes.push(text);
+    }
+
+    return {
+      slides,
+      notes,
+      fullText: slides.join("\n---\n") + (notes.length ? "\n\n[NOTES]\n" + notes.join("\n") : "")
+    };
+  }
+
+  // ===================================================================
+  // HEURISTIC EXTRACTION
+  // ===================================================================
+
+  // Try to find a person name: looks like "First Last" or "First Middle Last"
+  // - 2-4 words, capitalized, no digits
+  // - not matching common jobtitles/keywords
+  const NON_NAME_WORDS = new Set([
+    "life", "accenture", "cv", "curriculum", "vitae", "resume", "profile",
+    "consultant", "manager", "director", "principal", "senior", "junior",
+    "partner", "analyst", "specialist", "associate",
+    "experience", "skills", "education", "summary", "overview",
+    "contact", "email", "phone", "linkedin",
+    "banking", "financial", "services", "insurance", "retail",
+    "project", "client", "industry"
+  ]);
+
+  function looksLikeName(line) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.length > 50 || trimmed.length < 4) return 0;
+    if (/\d/.test(trimmed)) return 0;
+    if (trimmed.includes("@")) return 0;
+    const words = trimmed.split(/\s+/);
+    if (words.length < 2 || words.length > 5) return 0;
+
+    let score = 0;
+    let capitalizedCount = 0;
+    for (const w of words) {
+      const lw = w.toLowerCase().replace(/[.,;:()]/g, "");
+      if (NON_NAME_WORDS.has(lw)) return 0;
+      if (/^[A-ZÄÖÜ][a-zäöüß\-']+$/.test(w) || /^[A-ZÄÖÜ]r\./.test(w)) capitalizedCount++;
+    }
+    if (capitalizedCount >= 2) score = capitalizedCount / words.length;
+    return score;
+  }
+
+  function extractName(lines, fileName) {
+    // Strategy 1: Scan first 30 lines for best name candidate
+    let bestName = null;
+    let bestScore = 0;
+    for (let i = 0; i < Math.min(lines.length, 30); i++) {
+      const s = looksLikeName(lines[i]);
+      if (s > bestScore) {
+        bestScore = s;
+        bestName = lines[i].trim();
+      }
+      if (bestScore >= 1) break;
+    }
+    if (bestName && bestScore >= 0.6) return { name: bestName, confidence: bestScore };
+
+    // Strategy 2: Derive from filename
+    let nameFromFile = fileName
+      .replace(/\.[^.]+$/, "")
+      .replace(/[_\-]+/g, " ")
+      .replace(/\b(cv|lebenslauf|resume|profile|life)\b/gi, "")
+      .replace(/\d+/g, "")
+      .trim();
+
+    if (looksLikeName(nameFromFile) > 0.5) return { name: titleCase(nameFromFile), confidence: 0.5 };
+
+    return { name: nameFromFile || fileName.replace(/\.[^.]+$/, ""), confidence: 0.2 };
+  }
+
+  function extractRole(text) {
+    const lower = text.toLowerCase();
+    const sortedHints = Object.entries(SENIORITY_HINTS).sort((a, b) => b[0].length - a[0].length);
+    // Prefer multi-word hits first
+    for (const [word] of sortedHints) {
+      const regex = new RegExp(`\\b${word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, "i");
+      if (regex.test(text)) {
+        return { role: titleCase(word), confidence: 0.8 };
+      }
+    }
+    return { role: "Consultant", confidence: 0.2 };
+  }
+
+  function extractExperience(text) {
+    const lower = text.toLowerCase();
+    // Prioritize "X+ years" and "X years of experience"
+    const patterns = [
+      /(\d+)\s*\+\s*(?:years|jahre|jahren)/,
+      /(\d+)\s*(?:years|jahre|jahren)\s*(?:of\s*)?(?:experience|berufserfahrung)/,
+      /(?:experience|berufserfahrung)[:\s]*(\d+)\s*(?:years|jahre|jahren)?/,
+      /(\d+)\s*(?:years|jahre|jahren|yrs)/
+    ];
+    for (const p of patterns) {
+      const m = lower.match(p);
+      if (m) {
+        const yrs = parseInt(m[1]);
+        if (yrs > 0 && yrs < 50) return { experience: yrs, confidence: 0.8 };
+      }
+    }
+    // Fallback: seniority-based guess
+    for (const [word, val] of Object.entries(SENIORITY_HINTS)) {
+      if (lower.includes(word)) return { experience: val, confidence: 0.4 };
+    }
+    return { experience: 0, confidence: 0.1 };
+  }
+
+  function extractSkills(text) {
+    const lower = text.toLowerCase();
+    const found = KNOWN_SKILLS.filter(s => {
+      const regex = new RegExp(`\\b${s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, "i");
+      return regex.test(text);
+    });
+    const deduped = found.filter(s =>
+      !found.some(other => other !== s && other.includes(s) && other.length > s.length)
+    );
+
+    // Bonus: look for explicit "Skills:" section and parse bullets after it
+    const skillSection = text.match(/(?:^|\n)\s*(?:skills|skill set|kompetenzen|f[äa]higkeiten|expertise)[:\s]*([\s\S]{0,500})/i);
+    let sectionSkills = [];
+    if (skillSection) {
+      sectionSkills = skillSection[1]
+        .split(/[\n\u2022•·,;]/)
+        .map(s => s.trim())
+        .filter(s => s.length >= 2 && s.length <= 40 && !/\s{3,}/.test(s))
+        .slice(0, 15);
+    }
+
+    const confidence = deduped.length >= 3 ? 0.7 : deduped.length >= 1 ? 0.4 : 0.1;
+    return {
+      skills: [...new Set([...deduped.map(titleCase), ...sectionSkills])].slice(0, 20),
+      confidence
+    };
+  }
+
+  function extractIndustry(text) {
+    const lower = text.toLowerCase();
+    const counts = {};
+    for (const ind of INDUSTRIES) {
+      const regex = new RegExp(`\\b${ind.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, "gi");
+      const matches = lower.match(regex);
+      if (matches) counts[ind] = matches.length;
+    }
+    const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+    if (sorted.length === 0) return { industry: "", confidence: 0.1 };
+    return { industry: titleCase(sorted[0][0]), confidence: sorted[0][1] >= 3 ? 0.8 : 0.5 };
+  }
+
+  function extractCVData(text, fileName) {
+    const lines = text.split(/\n|\r/).map(l => l.trim()).filter(Boolean);
+
+    const nameResult = extractName(lines, fileName);
+    const roleResult = extractRole(text);
+    const expResult = extractExperience(text);
+    const industryResult = extractIndustry(text);
+    const skillsResult = extractSkills(text);
+
+    // Overall confidence (weighted avg)
+    const overallConfidence = (
+      nameResult.confidence * 0.4 +
+      skillsResult.confidence * 0.3 +
+      expResult.confidence * 0.15 +
+      industryResult.confidence * 0.1 +
+      roleResult.confidence * 0.05
+    );
+
+    return {
+      name: nameResult.name,
+      role: roleResult.role,
+      experience: expResult.experience,
+      industry: industryResult.industry,
+      skills: skillsResult.skills,
+      _confidence: overallConfidence,
+      _source: fileName,
+      _rawText: text.length > 4000 ? text.slice(0, 4000) + "..." : text,
+      _needsReview: overallConfidence < 0.6
+    };
+  }
+
+  async function parseFile(file) {
+    const name = file.name.toLowerCase();
+    if (name.endsWith(".pptx")) {
+      const result = await extractTextFromPPTX(file);
+      return extractCVData(result.fullText, file.name);
+    }
+    if (name.endsWith(".pdf")) {
+      const buffer = await file.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
+      let text = "";
+      for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i);
+        const content = await page.getTextContent();
+        text += content.items.map(it => it.str).join(" ") + "\n";
+      }
+      return extractCVData(text.trim(), file.name);
+    }
+    if (name.endsWith(".json")) {
+      const text = await file.text();
+      const parsed = JSON.parse(text);
+      const arr = Array.isArray(parsed) ? parsed : [parsed];
+      return arr.map(c => ({ ...normalizeConsultant(c), _confidence: 1.0, _source: file.name, _needsReview: false }));
+    }
+    // txt / md
+    const text = await file.text();
+    return extractCVData(text, file.name);
+  }
+
+  function normalize(s) { return (s || "").toLowerCase().trim(); }
+  function matchConsultant(consultant, rfp) {
+    const cSkills = (consultant.skills || []).map(normalize);
+    const rSkills = rfp.skills.map(normalize);
+    let matched = [], missed = [];
+    rSkills.forEach(rs => {
+      const hit = cSkills.find(cs => cs.includes(rs) || rs.includes(cs));
+      if (hit) matched.push(rs); else missed.push(rs);
+    });
+    const skillScore = rSkills.length ? matched.length / rSkills.length : 0;
+    const target = rfp.minExperience || 10;
+    const expScore = Math.min((consultant.experience || 0) / target, 1);
+    const cIndustry = normalize(consultant.industry || "");
+    const industryScore = rfp.industry && cIndustry.includes(normalize(rfp.industry)) ? 1 : 0;
+    const total = 0.5 * skillScore + 0.3 * expScore + 0.2 * industryScore;
+    const scorePct = Math.round(total * 100);
+
+    const reasons = [];
+    if (skillScore >= 0.7) reasons.push(`Starker Skill Fit (${matched.length}/${rSkills.length})`);
+    else if (skillScore >= 0.4) reasons.push(`Solider Skill Match (${matched.length}/${rSkills.length})`);
+    else reasons.push(`Begrenzter Skill Overlap (${matched.length}/${rSkills.length})`);
+    if (industryScore === 1) reasons.push(`Branche passt (${consultant.industry})`);
+    else if (rfp.industry) reasons.push(`Andere Branche (${consultant.industry || "—"})`);
+    if (expScore >= 1) reasons.push(`${consultant.experience}J Erfahrung — sehr passend`);
+    else if (expScore >= 0.7) reasons.push(`${consultant.experience}J Erfahrung — passend`);
+    else reasons.push(`${consultant.experience}J Erfahrung — evtl. knapp`);
+
+    return {
+      consultant, score: scorePct,
+      skillScore: Math.round(skillScore * 100),
+      expScore: Math.round(expScore * 100),
+      industryScore: Math.round(industryScore * 100),
+      matched, missed,
+      reasoning: reasons.join(" · ")
+    };
+  }
+
+  function scoreColor(score) {
+    if (score >= 75) return "var(--success)";
+    if (score >= 50) return "var(--warning)";
+    return "var(--danger)";
+  }
+  function escapeHtml(s) {
+    return String(s ?? "").replace(/[&<>"']/g, c => ({
+      '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+    }[c]));
+  }
+  function toast(msg) {
+    const t = document.createElement("div");
+    t.className = "toast"; t.textContent = msg;
+    document.body.appendChild(t);
+    setTimeout(() => t.remove(), 3000);
+  }
+
+  function normalizeConsultant(raw) {
+    const exp = parseInt(String(raw.experience ?? "").replace(/[^\d]/g, "")) || 0;
+    let skills = raw.skills;
+    if (typeof skills === "string") skills = skills.split(/[,;|/]/).map(s => s.trim()).filter(Boolean);
+    else if (!Array.isArray(skills)) skills = [];
+    return {
+      name: String(raw.name || "").trim() || "Unbekannt",
+      role: String(raw.role || "").trim() || "Consultant",
+      experience: exp,
+      industry: String(raw.industry || "").trim(),
+      skills: skills.map(s => String(s).trim()).filter(Boolean)
+    };
+  }
+
+  // ===================================================================
+  // BATCH IMPORT
+  // ===================================================================
+  let reviewQueue = []; // consultants pending review
+
+  async function handleBatchFiles(files) {
+    if (!files || files.length === 0) return;
+    const fileArray = Array.from(files);
+    const progressPanel = document.getElementById("batchProgress");
+    const statusEl = document.getElementById("batchStatus");
+    const fillEl = document.getElementById("batchProgressFill");
+    progressPanel.style.display = "block";
+
+    reviewQueue = [];
+    let errors = 0;
+
+    for (let i = 0; i < fileArray.length; i++) {
+      const file = fileArray[i];
+      statusEl.textContent = `Verarbeite ${i + 1} / ${fileArray.length}: ${file.name}`;
+      fillEl.style.width = `${((i + 1) / fileArray.length) * 100}%`;
+
+      try {
+        const result = await parseFile(file);
+        if (Array.isArray(result)) {
+          reviewQueue.push(...result);
+        } else {
+          reviewQueue.push(result);
+        }
+      } catch (e) {
+        console.error("Fehler bei", file.name, e);
+        errors++;
+      }
+      // Let UI breathe
+      await new Promise(r => setTimeout(r, 10));
+    }
+
+    statusEl.textContent = `✓ ${reviewQueue.length} CV(s) verarbeitet${errors ? `, ${errors} Fehler` : ""}`;
+    toast(`✓ ${reviewQueue.length} CVs geparst — prüfe unten die Daten`);
+    renderReviewPanel();
+  }
+
+  function renderReviewPanel() {
+    const panel = document.getElementById("reviewPanel");
+    const grid = document.getElementById("reviewGrid");
+    const summary = document.getElementById("reviewSummary");
+
+    if (reviewQueue.length === 0) {
+      panel.style.display = "none";
+      return;
+    }
+
+    panel.style.display = "block";
+    const needsReview = reviewQueue.filter(c => c._needsReview).length;
+    summary.innerHTML = `<strong style="color: var(--text);">${reviewQueue.length}</strong> CVs bereit · <strong style="color: var(--warning);">${needsReview}</strong> mit niedriger Confidence (gelb markiert)`;
+
+    grid.innerHTML = reviewQueue.map((c, idx) => {
+      const confClass = c._confidence >= 0.7 ? "high" : c._confidence >= 0.5 ? "medium" : "low";
+      const confLabel = c._confidence >= 0.7 ? "OK" : c._confidence >= 0.5 ? "Prüfen" : "Niedrig";
+      return `
+        <div class="review-card ${c._needsReview ? 'low-confidence' : ''}" onclick="editReviewItem(${idx})">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <strong>${escapeHtml(c.name)}</strong>
+            <span class="confidence-tag ${confClass}">${confLabel}</span>
+          </div>
+          <div class="meta">${escapeHtml(c.role)} · ${c.experience}J · ${escapeHtml(c.industry || "—")}</div>
+          <div class="meta" style="opacity: 0.7;">${c.skills.length} Skills: ${escapeHtml(c.skills.slice(0, 4).join(", "))}${c.skills.length > 4 ? "..." : ""}</div>
+          <div class="source">📎 ${escapeHtml(c._source)}</div>
+        </div>
+      `;
+    }).join("");
+  }
+
+  window.editReviewItem = function(idx) {
+    const c = reviewQueue[idx];
+    if (!c) return;
+    document.getElementById("editSourceInfo").textContent = `Quelle: ${c._source}`;
+    document.getElementById("editName").value = c.name || "";
+    document.getElementById("editRole").value = c.role || "";
+    document.getElementById("editExp").value = c.experience || 0;
+    document.getElementById("editIndustry").value = c.industry || "";
+    document.getElementById("editSkills").value = (c.skills || []).join(", ");
+    document.getElementById("editRawText").value = c._rawText || "";
+    document.getElementById("editRawTextWrapper").style.display = c._rawText ? "block" : "none";
+
+    currentEdit = { type: "review", idx };
+    document.getElementById("editModal").classList.add("show");
+  };
+
+  document.getElementById("reviewDoneBtn").addEventListener("click", () => {
+    if (reviewQueue.length === 0) return;
+    let added = 0;
+    for (const c of reviewQueue) {
+      const { _confidence, _source, _rawText, _needsReview, ...cleanData } = c;
+      const consultant = normalizeConsultant(cleanData);
+      // Preserve needs-review flag
+      consultant._needsReview = _needsReview;
+      consultant._source = _source;
+      addToDB(consultant);
+      added++;
+    }
+    reviewQueue = [];
+    document.getElementById("reviewPanel").style.display = "none";
+    document.getElementById("batchProgress").style.display = "none";
+    document.getElementById("batchDropText").innerHTML = `<strong style="font-size: 15px;">📦 Mehrere CV-Dateien hochladen</strong><br><span style="font-size: 12px; opacity: 0.8;">.pptx, .pdf, .txt — alle auf einmal</span>`;
+    document.getElementById("batchFile").value = "";
+    toast(`✓ ${added} Consultants zur Datenbank hinzugefügt`);
+    document.querySelector('[data-tab="database"]').click();
+  });
+
+  document.getElementById("reviewExportBtn").addEventListener("click", () => {
+    if (reviewQueue.length === 0) return;
+    const escape = (v) => {
+      const s = String(v ?? "");
+      return /[",\n;]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+    const header = "Name,Role,Experience,Industry,Skills,Source,Confidence";
+    const lines = reviewQueue.map(c =>
+      [c.name, c.role, c.experience, c.industry, (c.skills || []).join("; "), c._source, c._confidence.toFixed(2)]
+        .map(escape).join(",")
+    );
+    const csv = "\uFEFF" + header + "\n" + lines.join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `cv-review-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast("✓ CSV-Export für Excel-Check gestartet");
+  });
+
+  // Drop zones for batch
+  document.getElementById("batchFile").addEventListener("change", e => handleBatchFiles(e.target.files));
+  const batchDropZone = document.getElementById("batchDropZone");
+  ["dragenter", "dragover"].forEach(evt => {
+    batchDropZone.addEventListener(evt, e => { e.preventDefault(); batchDropZone.classList.add("dragover"); });
+  });
+  ["dragleave", "drop"].forEach(evt => {
+    batchDropZone.addEventListener(evt, e => { e.preventDefault(); batchDropZone.classList.remove("dragover"); });
+  });
+  batchDropZone.addEventListener("drop", e => handleBatchFiles(e.dataTransfer.files));
+
+  // ===================================================================
+  // DB RENDERING
+  // ===================================================================
+  function renderDB() {
+    const db = loadDB();
+    const list = document.getElementById("dbList");
+    document.getElementById("dbCount").textContent = `(${db.length})`;
+
+    const search = (document.getElementById("dbSearch")?.value || "").toLowerCase();
+    const filterReview = document.getElementById("filterReview")?.checked;
+
+    let filtered = db;
+    if (filterReview) filtered = filtered.filter(c => c._needsReview);
+    if (search) {
+      filtered = filtered.filter(c =>
+        (c.name || "").toLowerCase().includes(search) ||
+        (c.role || "").toLowerCase().includes(search) ||
+        (c.industry || "").toLowerCase().includes(search) ||
+        (c.skills || []).some(s => s.toLowerCase().includes(search))
+      );
+    }
+
+    if (filtered.length === 0) {
+      list.innerHTML = `
+        <div class="db-empty">
+          <div class="db-empty-icon">📂</div>
+          <div>${db.length === 0 ? "Noch keine CVs. Gehe zum 📥 CV Import Tab." : "Keine Treffer."}</div>
+        </div>`;
+      return;
+    }
+
+    list.innerHTML = filtered.map(c => `
+      <div class="db-item ${c._needsReview ? 'needs-review' : ''}">
+        <div class="db-item-info">
+          <div class="db-item-name">
+            ${escapeHtml(c.name)}
+            ${c._needsReview ? '<span class="review-badge">⚠ Needs Review</span>' : ''}
+          </div>
+          <div class="db-item-meta">
+            <span>👤 ${escapeHtml(c.role || "—")}</span>
+            <span>📅 ${c.experience || 0}J</span>
+            <span>🏢 ${escapeHtml(c.industry || "—")}</span>
+          </div>
+          <div class="db-item-skills">🎯 ${escapeHtml((c.skills || []).join(", ") || "keine Skills")}</div>
+          ${c._source ? `<div class="db-item-skills" style="margin-top: 3px; font-style: italic;">📎 ${escapeHtml(c._source)}</div>` : ''}
+        </div>
+        <div style="display: flex; gap: 6px;">
+          <button class="secondary small" onclick="openEditModal('${c.id}')">✏️</button>
+          <button class="danger" onclick="handleRemove('${c.id}')">🗑</button>
+        </div>
+      </div>
+    `).join("");
+  }
+
+  function updateBadges() {
+    document.getElementById("dbBadge").textContent = loadDB().length;
+  }
+
+  window.handleRemove = function(id) {
+    const c = loadDB().find(x => x.id === id);
+    if (!c) return;
+    if (confirm(`"${c.name}" wirklich löschen?`)) {
+      removeFromDB(id);
+      toast("Consultant gelöscht");
+    }
+  };
+
+  let currentEdit = null;
+  window.openEditModal = function(id) {
+    const c = loadDB().find(x => x.id === id);
+    if (!c) return;
+    currentEdit = { type: "db", id };
+    document.getElementById("editSourceInfo").textContent = c._source ? `Quelle: ${c._source}` : "";
+    document.getElementById("editName").value = c.name || "";
+    document.getElementById("editRole").value = c.role || "";
+    document.getElementById("editExp").value = c.experience || 0;
+    document.getElementById("editIndustry").value = c.industry || "";
+    document.getElementById("editSkills").value = (c.skills || []).join(", ");
+    document.getElementById("editRawTextWrapper").style.display = "none";
+    document.getElementById("editModal").classList.add("show");
+  };
+
+  document.getElementById("cancelEditBtn").addEventListener("click", () => {
+    document.getElementById("editModal").classList.remove("show");
+    currentEdit = null;
+  });
+
+  document.getElementById("saveEditBtn").addEventListener("click", () => {
+    if (!currentEdit) return;
+    const updates = {
+      name: document.getElementById("editName").value.trim(),
+      role: document.getElementById("editRole").value.trim(),
+      experience: parseInt(document.getElementById("editExp").value) || 0,
+      industry: document.getElementById("editIndustry").value.trim(),
+      skills: document.getElementById("editSkills").value.split(",").map(s => s.trim()).filter(Boolean)
+    };
+    if (currentEdit.type === "db") {
+      updates._needsReview = false;
+      updateInDB(currentEdit.id, updates);
+    } else if (currentEdit.type === "review") {
+      // Update in reviewQueue, mark reviewed
+      reviewQueue[currentEdit.idx] = {
+        ...reviewQueue[currentEdit.idx],
+        ...updates,
+        _needsReview: false,
+        _confidence: 1.0
+      };
+      renderReviewPanel();
+    }
+    document.getElementById("editModal").classList.remove("show");
+    currentEdit = null;
+    toast("✓ Gespeichert");
+  });
+
+  document.getElementById("dbSearch").addEventListener("input", renderDB);
+  document.getElementById("filterReview").addEventListener("change", renderDB);
+
+  // CV file upload (single-tab quick import)
+  async function handleCVFiles(files) {
+    if (!files || files.length === 0) return;
+    const dropText = document.getElementById("cvDropText");
+    const preview = document.getElementById("parsedPreview");
+    let added = 0, lastParsed = null;
+
+    dropText.innerHTML = `<strong>⏳ Verarbeite ${files.length} Datei(en)...</strong>`;
+
+    for (const file of files) {
+      try {
+        const result = await parseFile(file);
+        if (Array.isArray(result)) {
+          result.forEach(c => { addToDB(c); added++; });
+        } else {
+          const { _confidence, _source, _rawText, _needsReview, ...cleanData } = result;
+          const consultant = normalizeConsultant(cleanData);
+          consultant._needsReview = _needsReview;
+          consultant._source = _source;
+          addToDB(consultant);
+          lastParsed = result;
+          added++;
+        }
+      } catch (e) { console.error("Fehler:", file.name, e); }
+    }
+
+    dropText.innerHTML = `<strong class="file-loaded">✓ ${added} Consultant(s) hinzugefügt</strong>`;
+    if (lastParsed) {
+      preview.classList.add("show");
+      preview.innerHTML = `
+        <strong>Letzter Import:</strong><br>
+        <strong>Name:</strong> ${escapeHtml(lastParsed.name)} · <strong>Rolle:</strong> ${escapeHtml(lastParsed.role)} · <strong>${lastParsed.experience}J</strong><br>
+        <strong>Skills:</strong> ${escapeHtml(lastParsed.skills.join(", ") || "—")}<br>
+        <strong>Confidence:</strong> ${Math.round(lastParsed._confidence * 100)}%
+      `;
+    }
+    toast(`✓ ${added} CV(s) hochgeladen`);
+  }
+
+  document.getElementById("cvFile").addEventListener("change", e => handleCVFiles(e.target.files));
+  const cvDropZone = document.getElementById("cvDropZone");
+  ["dragenter", "dragover"].forEach(evt => {
+    cvDropZone.addEventListener(evt, e => { e.preventDefault(); cvDropZone.classList.add("dragover"); });
+  });
+  ["dragleave", "drop"].forEach(evt => {
+    cvDropZone.addEventListener(evt, e => { e.preventDefault(); cvDropZone.classList.remove("dragover"); });
+  });
+  cvDropZone.addEventListener("drop", e => handleCVFiles(e.dataTransfer.files));
+
+  // Manual add
+  document.getElementById("addManualBtn").addEventListener("click", () => {
+    const name = document.getElementById("manualName").value.trim();
+    if (!name) { toast("⚠ Name ist erforderlich"); return; }
+    addToDB({
+      name,
+      role: document.getElementById("manualRole").value.trim() || "Consultant",
+      experience: parseInt(document.getElementById("manualExp").value) || 0,
+      industry: document.getElementById("manualIndustry").value.trim(),
+      skills: document.getElementById("manualSkills").value.split(",").map(s => s.trim()).filter(Boolean)
+    });
+    ["manualName", "manualRole", "manualExp", "manualIndustry", "manualSkills"].forEach(id => {
+      document.getElementById(id).value = "";
+    });
+    toast(`✓ "${name}" hinzugefügt`);
+  });
+
+  // Export
+  document.getElementById("exportDbBtn").addEventListener("click", () => {
+    const db = loadDB();
+    if (db.length === 0) { toast("⚠ Datenbank ist leer"); return; }
+    const blob = new Blob([JSON.stringify(db, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `cv-database-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast("✓ JSON-Export gestartet");
+  });
+
+  document.getElementById("exportCsvBtn").addEventListener("click", () => {
+    const db = loadDB();
+    if (db.length === 0) { toast("⚠ Datenbank ist leer"); return; }
+    const escape = (v) => {
+      const s = String(v ?? "");
+      return /[",\n;]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+    const header = "Name,Role,Experience,Industry,Skills,NeedsReview,Source";
+    const lines = db.map(c =>
+      [c.name, c.role, c.experience, c.industry, (c.skills || []).join("; "), c._needsReview ? "YES" : "", c._source || ""]
+        .map(escape).join(",")
+    );
+    const csv = "\uFEFF" + header + "\n" + lines.join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `cv-database-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast("✓ CSV-Export gestartet");
+  });
+
+  document.getElementById("importDbBtn").addEventListener("click", () => {
+    document.getElementById("importDbFile").click();
+  });
+  document.getElementById("importDbFile").addEventListener("change", async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const arr = JSON.parse(text);
+      if (!Array.isArray(arr)) throw new Error("JSON muss ein Array sein");
+      arr.forEach(c => addToDB(normalizeConsultant(c)));
+      toast(`✓ ${arr.length} Consultant(s) importiert`);
+    } catch (err) { toast("⚠ Import fehlgeschlagen: " + err.message); }
+    e.target.value = "";
+  });
+
+  document.getElementById("clearDbBtn").addEventListener("click", () => {
+    const db = loadDB();
+    if (db.length === 0) { toast("Datenbank ist bereits leer"); return; }
+    if (confirm(`Wirklich alle ${db.length} Consultants löschen?`)) {
+      localStorage.removeItem(STORAGE_KEY);
+      renderDB(); updateBadges();
+      toast("Datenbank geleert");
+    }
+  });
+
+  // Tabs
+  document.querySelectorAll(".tab").forEach(btn => {
+    btn.addEventListener("click", () => {
+      document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+      document.querySelectorAll(".tab-content").forEach(c => c.classList.remove("active"));
+      btn.classList.add("active");
+      document.getElementById("tab-" + btn.dataset.tab).classList.add("active");
+    });
+  });
+
+  // RFP
+  const rfpInput = document.getElementById("rfpInput");
+  const rfpCounter = document.getElementById("rfpCounter");
+  function updateRfpCounter() { rfpCounter.textContent = `${rfpInput.value.length} Zeichen`; }
+  rfpInput.addEventListener("input", updateRfpCounter);
+  updateRfpCounter();
+
+  async function handleRfpFile(file) {
+    if (!file) return;
+    const dropText = document.getElementById("rfpDropText");
+    try {
+      dropText.innerHTML = `<strong>⏳ Wird geladen...</strong>`;
+      let text = "";
+      if (file.name.toLowerCase().endsWith(".pptx")) {
+        const result = await extractTextFromPPTX(file);
+        text = result.fullText;
+      } else if (file.name.toLowerCase().endsWith(".pdf")) {
+        const buffer = await file.arrayBuffer();
+        const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
+        for (let i = 1; i <= pdf.numPages; i++) {
+          const page = await pdf.getPage(i);
+          const content = await page.getTextContent();
+          text += content.items.map(it => it.str).join(" ") + "\n";
+        }
+      } else {
+        text = await file.text();
+      }
+      rfpInput.value = text.trim();
+      dropText.innerHTML = `<strong class="file-loaded">✓ ${escapeHtml(file.name)} geladen</strong><br><span style="font-size: 11px; opacity: 0.7;">${text.length} Zeichen</span>`;
+      updateRfpCounter();
+      toast("RFP geladen");
+    } catch (e) {
+      dropText.innerHTML = `<strong style="color: var(--danger);">✗ Fehler</strong>`;
+    }
+  }
+  document.getElementById("rfpFile").addEventListener("change", e => handleRfpFile(e.target.files[0]));
+  const rfpDropZone = document.getElementById("rfpDropZone");
+  ["dragenter", "dragover"].forEach(evt => {
+    rfpDropZone.addEventListener(evt, e => { e.preventDefault(); rfpDropZone.classList.add("dragover"); });
+  });
+  ["dragleave", "drop"].forEach(evt => {
+    rfpDropZone.addEventListener(evt, e => { e.preventDefault(); rfpDropZone.classList.remove("dragover"); });
+  });
+  rfpDropZone.addEventListener("drop", e => { const f = e.dataTransfer.files[0]; if (f) handleRfpFile(f); });
+
+  function renderResults(rfp, results) {
+    const container = document.getElementById("resultsContainer");
+    const avg = results.length ? Math.round(results.reduce((a, r) => a + r.score, 0) / results.length) : 0;
+    const topScore = results.length ? results[0].score : 0;
+
+    document.getElementById("statsBar").innerHTML = `
+      <span><strong>${results.length}</strong> geprüft</span>
+      <span><strong>${rfp.skills.length}</strong> Skills</span>
+      <span>Ø: <strong>${avg}%</strong></span>
+      <span>Top: <strong style="color:${scoreColor(topScore)}">${topScore}%</strong></span>
+    `;
+
+    let html = `
+      <div class="results-header"><h2>Matching-Ergebnisse</h2></div>
+      <div class="extracted-section">
+        <div class="extracted-title">Extrahierte RFP-Signale</div>
+        <div class="extracted-tags">
+          ${rfp.skills.map(s => `<span class="tag">${escapeHtml(s)}</span>`).join("")}
+          ${rfp.industry ? `<span class="tag meta">Branche: ${escapeHtml(rfp.industry)}</span>` : ""}
+          ${rfp.minExperience ? `<span class="tag meta">Min. Exp: ${rfp.minExperience}J</span>` : ""}
+          ${rfp.skills.length === 0 ? `<span class="tag meta">Keine Skills erkannt</span>` : ""}
+        </div>
+      </div>
+      <div class="cards">`;
+
+    results.forEach((r, idx) => {
+      const isTop = idx < 3 && r.score > 0;
+      const color = scoreColor(r.score);
+      html += `
+        <div class="card ${isTop ? 'top' : ''}" style="animation-delay:${idx * 0.04}s">
+          ${isTop ? `<div class="top-badge">Top ${idx + 1}</div>` : ''}
+          <div class="card-header">
+            <div>
+              <div class="consultant-name">${escapeHtml(r.consultant.name || "Unbekannt")}</div>
+              <div class="consultant-role">${escapeHtml(r.consultant.role || "Consultant")} · ${escapeHtml(r.consultant.industry || "—")}</div>
+            </div>
+            <div class="score" style="color:${color}">${r.score}%</div>
+          </div>
+          <div class="score-bar">
+            <div class="score-fill" style="width:${r.score}%;background:${color}"></div>
+          </div>
+          <div class="breakdown">
+            <div class="breakdown-item"><div class="breakdown-label">Skills</div><div class="breakdown-value">${r.skillScore}%</div></div>
+            <div class="breakdown-item"><div class="breakdown-label">Exp.</div><div class="breakdown-value">${r.expScore}%</div></div>
+            <div class="breakdown-item"><div class="breakdown-label">Industry</div><div class="breakdown-value">${r.industryScore}%</div></div>
+          </div>
+          <div class="reasoning">${escapeHtml(r.reasoning)}</div>
+          <div class="skills-matched">
+            ${r.matched.map(s => `<span class="skill-pill">✓ ${escapeHtml(s)}</span>`).join("")}
+            ${r.missed.slice(0, 3).map(s => `<span class="skill-pill miss">− ${escapeHtml(s)}</span>`).join("")}
+          </div>
+        </div>`;
+    });
+    html += `</div>`;
+    container.innerHTML = html;
+  }
+
+  document.getElementById("runBtn").addEventListener("click", () => {
+    const rfpText = rfpInput.value.trim();
+    if (!rfpText) { toast("⚠ Bitte RFP einfügen"); return; }
+    const db = loadDB();
+    if (db.length === 0) {
+      toast("⚠ Datenbank leer — importiere CVs");
+      document.querySelector('[data-tab="import"]').click();
+      return;
+    }
+    const rfp = extractFromRFP(rfpText);
+    const results = db.map(c => matchConsultant(c, rfp)).sort((a, b) => b.score - a.score);
+    renderResults(rfp, results);
+    toast(`✓ ${results.length} Consultants geprüft`);
+  });
+
+  document.getElementById("resetBtn").addEventListener("click", () => {
+    rfpInput.value = "";
+    document.getElementById("resultsContainer").innerHTML = `
+      <div class="empty-state">
+        <div class="empty-state-icon">⚡</div>
+        <div>Klicke auf „Match gegen Datenbank" um Ergebnisse zu berechnen.</div>
+      </div>`;
+    document.getElementById("statsBar").innerHTML = "";
+    document.getElementById("rfpDropText").innerHTML = `<strong>📄 RFP-Datei hochladen</strong> oder hier ablegen<br><span style="font-size: 11px; opacity: 0.7;">Unterstützt: .txt, .md, .pdf, .pptx</span>`;
+    updateRfpCounter();
+  });
+
+  document.getElementById("loadSampleBtn").addEventListener("click", () => {
+    rfpInput.value = `RFP: Digital Transformation for Tier-1 European Bank
+
+We are seeking a senior consulting team for an 18-month digital transformation program at a major European bank. Scope includes:
+
+- Core banking modernization and cloud migration to AWS
+- Implementation of digital banking and open banking APIs
+- Regulatory compliance (Basel IV, AML, KYC)
+- Change management across 5,000 employees
+- Post-merger integration of a recently acquired fintech
+
+Required: 10+ years of experience in financial services, proven track record in banking transformation, strong SAP and cloud expertise. Senior Manager or Principal level preferred.
+
+Industry: Banking / Financial Services
+Location: Frankfurt, Germany`;
+    updateRfpCounter();
+    toast("Beispiel-RFP geladen");
+  });
+
+  (function seedDB() {
+    if (loadDB().length > 0) return;
+    const sample = [
+      { name: "Dr. Anna Weber", role: "Senior Manager", skills: ["PMI", "Banking", "SAP", "Change Management", "Regulatory"], experience: 12, industry: "Banking" },
+      { name: "Marc Schulz", role: "Principal", skills: ["Cloud Migration", "Digital Banking", "Payments", "SAP"], experience: 9, industry: "Banking" },
+      { name: "Sophie Müller", role: "Managing Director", skills: ["Banking", "Regulatory", "Compliance", "Risk", "Payments"], experience: 15, industry: "Banking" }
+    ];
+    sample.forEach(c => addToDB(c));
+  })();
+
+  renderDB(); updateBadges();
+
+  document.getElementById("editModal").addEventListener("click", (e) => {
+    if (e.target.id === "editModal") {
+      document.getElementById("editModal").classList.remove("show");
+      currentEdit = null;
+    }
+  });
+</script>
+</body>
+</html>
